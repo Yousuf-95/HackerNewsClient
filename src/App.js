@@ -1,8 +1,10 @@
 import React from 'react';
+// import sortBy from 'lodash';
 import './App.css';
 import Search from './Components/Search-Component.jsx';
 import Table from './Components/Table-Component';
 import Button from './Components/Button-Component';
+import Loading from './Components/Loading-Component';
 
 const DEFAULT_QUERY = 'redux';
 const PATH_BASE = 'https://hn.algolia.com/api/v1';
@@ -11,6 +13,13 @@ const PARAM_SEARCH = 'query=';
 const PARAM_PAGE = 'page=';
 const url = `${PATH_BASE}${PATH_SEARCH}?${PARAM_SEARCH}${DEFAULT_QUERY}${PARAM_PAGE}`;
 
+const withLoading = (Component) => ({ isLoading, ...rest }) =>
+isLoading
+? <Loading />
+: <Component { ...rest } />
+
+const ButtonWithLoading = withLoading(Button);
+
 class App extends React.Component{
   constructor(props){
     super(props);
@@ -18,7 +27,11 @@ class App extends React.Component{
     this.state = {
       results : null,
       searchKey: '',
-      searchTerm: DEFAULT_QUERY
+      searchTerm: DEFAULT_QUERY,
+      error: null,
+      isLoading: false,
+      sortKey: 'NONE',
+      isSortReverse: false
     }
 
     this.onSearchSubmit = this.onSearchSubmit.bind(this);
@@ -27,6 +40,7 @@ class App extends React.Component{
     this.onDismiss = this.onDismiss.bind(this);
     this.onSearchChange = this.onSearchChange.bind(this);
     this.needsToSearchTopStories = this.needsToSearchTopStories.bind(this);
+    this.onSort = this.onSort.bind(this);
 
     console.log(this.state.result);
   }
@@ -54,7 +68,8 @@ class App extends React.Component{
       results: { 
         ...results,
         [searchKey] : { hits: updatedHits, page}
-      }
+      },
+      isLoading: false
     });
   }
 
@@ -70,14 +85,22 @@ class App extends React.Component{
   }
 
   fetchSearchTopStories(searchTerm, page = 0){
+    this.setState({ isLoading: true });
+    
     fetch(`${PATH_BASE}${PATH_SEARCH}?${PARAM_SEARCH}${searchTerm}&${PARAM_PAGE}${page}`)
     .then(response => response.json())
     .then(result => this.setSearchTopStories(result))
-    .catch(error => error);
+    .catch(error => this.setState({ error}));
   }
 
   needsToSearchTopStories(searchTerm){
     return !this.state.results[searchTerm];
+  }
+
+  onSort(sortKey){
+    const isSortReverse = this.state.sortKey === sortKey && !this.state.isSortReverse;
+
+    this.setState({ sortKey, isSortReverse });
   }
 
   componentDidMount(){
@@ -86,7 +109,7 @@ class App extends React.Component{
   }
 
   render(){
-    const { results, searchKey, searchTerm } = this.state;
+    const { results, searchKey, searchTerm, error, isLoading, sortKey, isSortReverse} = this.state;
     const page = (results && results[searchKey] && results[searchKey].page) || 0;
 
   const list = ( results && results[searchKey] && results[searchKey].hits) || [];
@@ -99,17 +122,25 @@ class App extends React.Component{
         <Search value = {searchTerm} onChange = {this.onSearchChange} onSubmit = {this.onSearchSubmit}>
         Search</Search>
         </div>
-        { results ? 
+        { error ? 
+          <div className = "interactions">
+            <p>Something went Wrong</p>
+          </div> : 
           <Table
           list = {list}
+          sortKey = {sortKey}
+          isSortReverse = { isSortReverse }
+          onSort = {this.onSort}
           // pattern = {searchTerm}
           onDismiss = {this.onDismiss} 
-        >
-          </Table> : 
-          null
+          >
+          </Table> 
         }
         <div className = "interactions">
-          <Button onClick = {() => this.fetchSearchTopStories(searchKey, page+1)}>More</Button>
+          {
+            // isLoading ? <Loading /> : <Button onClick = {() => this.fetchSearchTopStories(searchKey, page+1)}>More</Button>
+            <ButtonWithLoading isLoading = {isLoading} onClick = { () => this.fetchSearchTopStories(searchKey, page + 1)}>More</ButtonWithLoading>
+          }
         </div>
         
       </div>
